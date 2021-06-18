@@ -19,7 +19,7 @@ TRAIN_FILE_PATH = os.path.join(FOLDER, TRAINING_BASE+'.tfrecord.gz')
 TEST_FILE_PATH = os.path.join(FOLDER, EVAL_BASE+'.tfrecord.gz')
 
 MODEL_DIR = 'models'
-MODEL_NAME = 'model_v001'
+MODEL_NAME = 'model_v0_0_3'
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
 
 
@@ -70,15 +70,14 @@ test_dataset = tf.data.TFRecordDataset(TEST_FILE_PATH, compression_type='GZIP').
 model = tf.keras.models.Sequential([
   tf.keras.layers.Dense(64, activation=tf.nn.relu),
   tf.keras.layers.Dropout(0.2),
-  tf.keras.layers.Dense(1, activation='linear')
+  tf.keras.layers.Dense(1, activation='sigmoid')
 ])
 
 # Compile the model with the specified loss function.
-model.compile(optimizer=tf.keras.optimizers.Adam(),
-              loss='mse',
-              metrics=['mae'])
+model.compile(optimizer=tf.keras.optimizers.Adam(), loss='mae')
+              
 
 # Fit the model to the training data.
-model.fit(x=input_dataset, validation_data=test_dataset, epochs=100)
+model.fit(x=input_dataset, validation_data=test_dataset, epochs=500)
 
 model.save(MODEL_PATH, save_format='tf')
