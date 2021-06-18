@@ -55,11 +55,9 @@ train_dataset = train_dataset.map(parse_tfrecord, num_parallel_calls=5)
 
 
 # Keras requires inputs as a tuple.  Note that the inputs must be in the
-# right shape.  Also note that to use the categorical_crossentropy loss,
-# the label needs to be turned into a one-hot vector.
+# right shape.  
 def to_tuple(inputs, targets):
-  # return (tf.transpose(list(inputs.values())), targets.values())
-  return (tf.transpose(list(inputs.values())), targets)
+    return (tf.expand_dims(tf.transpose(list(inputs.values())), 1), tf.expand_dims(targets, 1))
 
 # Map the to_tuple function, shuffle and batch.
 input_dataset = train_dataset.map(to_tuple).batch(1024*16)
@@ -68,9 +66,10 @@ test_dataset = tf.data.TFRecordDataset(TEST_FILE_PATH, compression_type='GZIP').
 
 # Define the layers in the model.
 model = tf.keras.models.Sequential([
-  tf.keras.layers.Dense(64, activation=tf.nn.relu),
-  tf.keras.layers.Dropout(0.2),
-  tf.keras.layers.Dense(1, activation='sigmoid')
+    tf.keras.layers.Input((None, None, len(BANDS),)),
+    tf.keras.layers.Conv2D(64, (1,1), activation=tf.nn.relu),
+    tf.keras.layers.Dropout(0.1),
+    tf.keras.layers.Conv2D(1, (1,1), activation='sigmoid')
 ])
 
 # Compile the model with the specified loss function.
