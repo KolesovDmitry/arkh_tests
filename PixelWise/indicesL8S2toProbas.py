@@ -68,7 +68,9 @@ test_dataset = tf.data.TFRecordDataset(TEST_FILE_PATH, compression_type='GZIP').
 model = tf.keras.models.Sequential([
     tf.keras.layers.Input((None, None, len(BANDS),)),
     tf.keras.layers.Conv2D(64, (1,1), activation=tf.nn.relu),
-    tf.keras.layers.Dropout(0.1),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Conv2D(64, (1,1), activation=tf.nn.relu),
+    tf.keras.layers.Dropout(0.2),
     tf.keras.layers.Conv2D(1, (1,1), activation='sigmoid')
 ])
 
@@ -77,6 +79,9 @@ model.compile(optimizer=tf.keras.optimizers.Adam(), loss='mae')
               
 
 # Fit the model to the training data.
-model.fit(x=input_dataset, validation_data=test_dataset, epochs=500)
+model.fit(x=input_dataset, validation_data=test_dataset, epochs=250)
+model.fit(x=input_dataset, validation_data=test_dataset, epochs=250)
+model.fit(x=input_dataset, validation_data=test_dataset, epochs=250)
+model.fit(x=input_dataset, validation_data=test_dataset, epochs=250)
 
 model.save(MODEL_PATH, save_format='tf')
