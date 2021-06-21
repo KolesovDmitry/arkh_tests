@@ -19,11 +19,11 @@ TRAIN_FILE_PATH = os.path.join(FOLDER, TRAINING_BASE+'.tfrecord.gz')
 TEST_FILE_PATH = os.path.join(FOLDER, EVAL_BASE+'.tfrecord.gz')
 
 MODEL_DIR = 'models'
-MODEL_NAME = 'model_v0_0_3'
+MODEL_NAME = 'model_v0_0_5'
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
 
 
-BANDS = ['fitted_EVI', 'fitted_NDVI', 'fitted_GNDVI', 'fitted_NRGI', 'fitted_RVI', 'fitted_NDWI', 'fitted_SAVI', 'EVI', 'NDVI', 'GNDVI', 'NRGI', 'RVI', 'NDWI', 'SAVI'] 
+BANDS = ['fitted_EVI', 'fitted_NDVI', 'fitted_GNDVI', 'fitted_NRGI', 'fitted_RVI', 'fitted_NDWI', 'fitted_SAVI', 'EVI', 'NDVI', 'GNDVI', 'NRGI', 'RVI', 'NDWI', 'SAVI', 'dnum'] 
 TARGET = 'target'
 TARGET_BANDS = [TARGET]
 FEATURE_NAMES = BANDS + TARGET_BANDS
@@ -60,7 +60,8 @@ def to_tuple(inputs, targets):
     return (tf.expand_dims(tf.transpose(list(inputs.values())), 1), tf.expand_dims(targets, 1))
 
 # Map the to_tuple function, shuffle and batch.
-input_dataset = train_dataset.map(to_tuple).batch(1024*16)
+BATCH_SIZE = 1024 * 32
+input_dataset = train_dataset.map(to_tuple).shuffle(BATCH_SIZE).batch(BATCH_SIZE)
 test_dataset = tf.data.TFRecordDataset(TEST_FILE_PATH, compression_type='GZIP').map(parse_tfrecord, num_parallel_calls=5).map(to_tuple).batch(1024*16)
 
 
@@ -75,7 +76,7 @@ model = tf.keras.models.Sequential([
 ])
 
 # Compile the model with the specified loss function.
-model.compile(optimizer=tf.keras.optimizers.Adam(), loss='mae')
+model.compile(optimizer=tf.keras.optimizers.Adam(), loss=tf.keras.metrics.binary_crossentropy, metrics=['mae'])
               
 
 # Fit the model to the training data.
