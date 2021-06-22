@@ -19,7 +19,7 @@ TRAIN_FILE_PATH = os.path.join(FOLDER, TRAINING_BASE+'.tfrecord.gz')
 TEST_FILE_PATH = os.path.join(FOLDER, EVAL_BASE+'.tfrecord.gz')
 
 MODEL_DIR = 'models'
-MODEL_NAME = 'model_v0_0_5'
+MODEL_NAME = 'model_v0_0_6'
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
 
 
