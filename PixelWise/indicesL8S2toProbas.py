@@ -19,7 +19,7 @@ TRAIN_FILE_PATH = os.path.join(FOLDER, TRAINING_BASE+'.tfrecord.gz')
 TEST_FILE_PATH = os.path.join(FOLDER, EVAL_BASE+'.tfrecord.gz')
 
 MODEL_DIR = 'models'
-MODEL_NAME = 'model_v0_0_9'
+MODEL_NAME = 'model_v0_0_10'
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
 
 
@@ -69,24 +69,31 @@ input_dataset = train_dataset.map(to_tuple).shuffle(BUFFER_SIZE).batch(BATCH_SIZ
 test_dataset = tf.data.TFRecordDataset(TEST_FILE_PATH, compression_type='GZIP').map(parse_tfrecord, num_parallel_calls=5).map(to_tuple).batch(BATCH_SIZE)  # .repeat()
 
 
+lr_schedule = tf.keras.optimizers.schedules.InverseTimeDecay(
+  0.05,
+  decay_steps=1000,
+  decay_rate=1,
+  staircase=False)
+
+def get_optimizer():
+  # return tf.keras.optimizers.SGD(lr_schedule)
+  return tf.keras.optimizers.Adam()
+
+
 # Define the layers in the model.
-regularization_w = 0.0001
+optimizer = get_optimizer()
 model = tf.keras.models.Sequential([
-    tf.keras.layers.Input((None, None, len(BANDS),)),
-    tf.keras.layers.Conv2D(64, (1,1), activation=tf.nn.elu, kernel_regularizer=tf.keras.regularizers.L2(regularization_w)),
-    tf.keras.layers.GaussianNoise(0.02),
-    tf.keras.layers.Dropout(0.2),
-    tf.keras.layers.Conv2D(64, (1,1), activation=tf.nn.elu, kernel_regularizer=tf.keras.regularizers.L2(regularization_w)),
-    tf.keras.layers.GaussianNoise(0.02),
-    tf.keras.layers.Dropout(0.2),
-    tf.keras.layers.Conv2D(1, (1,1), activation='sigmoid', kernel_regularizer=tf.keras.regularizers.L2(regularization_w))
+    tf.keras.layers.InputLayer((None, None, len(BANDS),)),
+    tf.keras.layers.Conv2D(1024, (1,1), activation=tf.nn.elu),
+    tf.keras.layers.Conv2D(1024, (1,1), activation=tf.nn.elu),
+    tf.keras.layers.Conv2D(1, (1,1), activation='sigmoid')
 ])
 
 # Compile the model with the specified loss function.
-model.compile(optimizer=tf.keras.optimizers.Adam(), loss=tf.keras.metrics.binary_crossentropy, metrics=['mae'])
+model.compile(optimizer=optimizer, loss=tf.keras.metrics.binary_crossentropy, metrics=['mae'])
               
 
 # Fit the model to the training data.
-model.fit(x=input_dataset, validation_data=test_dataset, epochs=150)
+model.fit(x=test_dataset, epochs=5000)
 
-model.save(MODEL_PATH, save_format='tf')
+# model.save(MODEL_PATH, save_format='tf')
