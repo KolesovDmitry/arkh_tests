@@ -80,20 +80,30 @@ def get_optimizer():
   return tf.keras.optimizers.Adam()
 
 
+checkpoint_path = "training/cp-{epoch:04d}.ckpt"
+checkpoint_dir = os.path.dirname(checkpoint_path)
+# Create a callback that saves the model's weights every 5 epochs
+cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=25*BATCH_SIZE)
+
+
 # Define the layers in the model.
 optimizer = get_optimizer()
+regularization_w = 0.0001
 model = tf.keras.models.Sequential([
     tf.keras.layers.InputLayer((None, None, len(BANDS),)),
-    tf.keras.layers.Conv2D(1024, (1,1), activation=tf.nn.elu),
-    tf.keras.layers.Conv2D(1024, (1,1), activation=tf.nn.elu),
-    tf.keras.layers.Conv2D(1, (1,1), activation='sigmoid')
+    tf.keras.layers.GaussianNoise(0.02),
+    tf.keras.layers.Conv2D(512, (1,1), activation=tf.nn.elu, kernel_regularizer=tf.keras.regularizers.L2(regularization_w)),
+    tf.keras.layers.Conv2D(128, (1,1), activation=tf.nn.elu, kernel_regularizer=tf.keras.regularizers.L2(regularization_w)),
+    tf.keras.layers.Conv2D(1, (1,1), activation='sigmoid', kernel_regularizer=tf.keras.regularizers.L2(regularization_w))
 ])
+model.save_weights(checkpoint_path.format(epoch=0))
+
 
 # Compile the model with the specified loss function.
 model.compile(optimizer=optimizer, loss=tf.keras.metrics.binary_crossentropy, metrics=['mae'])
               
 
 # Fit the model to the training data.
-model.fit(x=test_dataset, epochs=5000)
+model.fit(x=input_dataset, validation_data=test_dataset, callbacks=[cp_callback], epochs=3000)
 
 # model.save(MODEL_PATH, save_format='tf')
