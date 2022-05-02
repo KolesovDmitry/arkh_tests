@@ -1,13 +1,6 @@
 FROM tensorflow/tensorflow:latest-gpu
 
-RUN pip install tifffile
-RUN pip install ipython
-RUN pip install ipdb
-RUN pip install jedi==0.17.2
-RUN pip install earthengine-api 
-RUN pip install pandas
-RUN pip install rasterio
-RUN pip install imagecodecs  
+RUN pip install tifffile ipython ipdb jedi==0.17.2 earthengine-api pandas rasterio imagecodecs  
 
 
 # Installing Google Cloud SDK
