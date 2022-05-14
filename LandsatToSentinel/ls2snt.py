@@ -9,7 +9,7 @@ import numpy as np
 
 from pathlib import Path 
 
-from tifffile import tifffile as tiff
+import gdal
 
 import tensorflow as tf
 from tensorflow import keras
@@ -22,7 +22,7 @@ from tensorflow.keras.utils import Sequence
 
 
 # Specify names locations
-FOLDER = '/data/Alarm/Samples/2021.05.01'
+FOLDER = '/data/Alarm/Samples/'
 TRAINING_BASE = 'probas_.tif'
 VALID_PIXELS = 'used_pixels.tif'
 
@@ -48,13 +48,21 @@ class TiffReader:
         self.input_band_count = input_band_count
 
     def get_sample_image(self, filename):
-        x = tiff.imread(filename)
-        x = np.nan_to_num(x)   
-        y = x[:, :, self.input_band_count:]
+        ds = gdal.Open(filename)
+        arr = np.array(ds.ReadAsArray())
+        arr = np.nan_to_num(arr)
+
+        # roll axis to conform TF model input
+        arr = np.rollaxis(arr, 0, 3)
+        x = arr[:, :, :self.input_band_count]
+        y = arr[:, :, self.input_band_count:]
+
         mask = np.logical_not(np.isnan(y).any(axis=2))
         mask = mask.astype(int)
+        x = np.nan_to_num(x)   
+        y = np.nan_to_num(y)   
         
-        return (x[:, :, :self.input_band_count], y, mask)
+        return (x, y, mask)
 
 
 class FileSequence(Sequence):
@@ -96,6 +104,7 @@ class FileSequence(Sequence):
         return xdata, ydata, maskdata
 
     def get_sample_image(self, filename):
+        filename = str(filename)
         return self.tiff_reader.get_sample_image(filename)
 
 
@@ -161,11 +170,11 @@ model = get_model()
 # model.save_weights(checkpoint_path.format(epoch=0))
 
 
-batch_size = 4  # 196 is ok
+batch_size = 128   # 196 is ok
 train_datasets = FileSequence(TRAIN_DATA, batch_size=batch_size, width=64, repeats=1)
 validation_datasets = FileSequence(VALIDATION_DATA, batch_size=batch_size, width=64, repeats=1)
 with tf.device('/GPU:0'):
-    model.fit(x=train_datasets, validation_data=validation_datasets, epochs=2)
+    model.fit(x=train_datasets, validation_data=validation_datasets, epochs=3)
 
 model.save(MODEL_PATH, save_format='tf')
 
