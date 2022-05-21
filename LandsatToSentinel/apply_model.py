@@ -13,15 +13,14 @@ def read_model(model_path):
 
 
 def apply_model(filename, result_filename, model_path, input_band_count=8):
-    import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
     model = read_model(model_path)
 
     in_ds = gdal.Open(filename)
     arr = np.array(in_ds.ReadAsArray())
 
     # roll axis to conform TF model input
-    arr = np.rollaxis(arr, 0, 3)
-    data = arr[:, :, :input_band_count]
+    data = np.rollaxis(arr, 0, 3)
 
     # crop input data to conform model
     conv_layer_count = 2  # layers in the model
@@ -56,7 +55,7 @@ def apply_model(filename, result_filename, model_path, input_band_count=8):
 
 if __name__ == "__main__":
     model_path = '/tmp/Model'
-    filename = '/data/Alarm/Samples/2021.09.01/0b511354cb9611ec8cb90242ac110008/probas_.tif'
+    filename = '/data/Alarm/Samples/2021.09.01/0b511354cb9611ec8cb90242ac110008/landsat.tif'
     result_filename = '/data/Alarm/Samples/2021.09.01/0b511354cb9611ec8cb90242ac110008/result.tif'
     apply_model(filename, result_filename, model_path)
 

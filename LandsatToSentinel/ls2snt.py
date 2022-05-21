@@ -7,7 +7,7 @@ from pprint import pprint
 
 import numpy as np
 
-from pathlib import Path 
+# from pathlib import Path 
 
 import gdal
 
@@ -23,56 +23,40 @@ from tensorflow.keras.utils import Sequence
 
 # Specify names locations
 FOLDER = '/data/Alarm/Samples/'
-TRAINING_BASE = 'probas_.tif'
-VALID_PIXELS = 'used_pixels.tif'
+LANDSAT_FILENAME = 'landsat.tif'
+SENTINEL_FILENAME = 'sentinel.tif'
 
-TRAIN_FILE_PATH = os.path.join(FOLDER, TRAINING_BASE+'.tif')
 VALIDATION_RATIO = 0.33 
 
 MODEL_PATH = '/data/Alarm/Samples/Model'
 
-DATA_FILES = list(Path(FOLDER).rglob("probas_.tif"))
-random.shuffle(DATA_FILES) 
-validation_count = int(len(DATA_FILES) * VALIDATION_RATIO)
-
-TRAIN_DATA = sorted(DATA_FILES[validation_count:])
-VALIDATION_DATA = sorted(DATA_FILES[:validation_count])
-
-INPUT_BANDS = ['day_num', 'evi', 'ndvi', 'gndvi', 'nrgi', 'rvi', 'ndwi', 'savi'] 
-TARGET_BANDS = ['EVI', 'NDVI', 'GNDVI', 'NRGI', 'RVI', 'NDWI', 'SAVI']
-FEATURE_NAMES = INPUT_BANDS + TARGET_BANDS
-
 
 class TiffReader:
-    def __init__(self, input_band_count=8):
-        self.input_band_count = input_band_count
-
-    def get_sample_image(self, filename):
+    def get_sample_image(self, filename, return_mask=False):
         ds = gdal.Open(filename)
         arr = np.array(ds.ReadAsArray())
         arr = np.nan_to_num(arr)
 
         # roll axis to conform TF model input
         arr = np.rollaxis(arr, 0, 3)
-        x = arr[:, :, :self.input_band_count]
-        y = arr[:, :, self.input_band_count:]
 
-        mask = np.logical_not(np.isnan(y).any(axis=2))
-        mask = mask.astype(int)
-        x = np.nan_to_num(x)   
-        y = np.nan_to_num(y)   
-        
-        return (x, y, mask)
+        if return_mask:
+            mask = np.logical_not(np.isnan(arr).any(axis=2))
+            mask = mask.astype(int)
+            arr = np.nan_to_num(arr)
+            return arr, mask
+        else:
+            arr = np.nan_to_num(arr)
+            return arr
 
 
 class FileSequence(Sequence):
-    def __init__(self, filenames, batch_size, repeats=32, width=1024, input_band_count=8):
+    def __init__(self, filenames, batch_size, repeats=32, width=1024):
         self.filenames = filenames
         random.shuffle(self.filenames)
         self.batch_size = batch_size
         self.width = width
-        self.input_band_count = input_band_count
-        self.tiff_reader = TiffReader(input_band_count=self.input_band_count)
+        self.tiff_reader = TiffReader()
 
         self.iter_count = 0
         self.max_iter_count = repeats
@@ -85,8 +69,9 @@ class FileSequence(Sequence):
 
     def shrade_ds(self, idx):
         idx = idx % len(self.filenames)
-        filename = self.filenames[idx]
-        x, y, mask = self.get_sample_image(filename)
+        x_file, y_file = self.filenames[idx]
+        x = self.get_sample_image(x_file, return_mask=False)
+        y, mask = self.get_sample_image(y_file, return_mask=True)
         rows, cols = x.shape[0], x.shape[1]
         i = np.random.randint(low=0, high=rows-self.width, size=self.batch_size)
         j = np.random.randint(low=0, high=cols-self.width, size=self.batch_size)
@@ -103,9 +88,9 @@ class FileSequence(Sequence):
 
         return xdata, ydata, maskdata
 
-    def get_sample_image(self, filename):
-        filename = str(filename)
-        return self.tiff_reader.get_sample_image(filename)
+    def get_sample_image(self, filename, return_mask=False):
+        # filename = str(filename)
+        return self.tiff_reader.get_sample_image(filename, return_mask=return_mask)
 
 
 
@@ -158,38 +143,55 @@ def get_model(input_band_count=8, output_band_count=7, loss='MeanAbsoluteError',
 
     return model
     
+############################################################
+# Train process
+############################################################
+
+# Get list of PAIRS landsat/sentinel images
+# Input bands (Landsat): ['day_num', 'evi', 'ndvi', 'gndvi', 'nrgi', 'rvi', 'ndwi', 'savi'] 
+# target_bands (Sentinel): ['EVI', 'NDVI', 'GNDVI', 'NRGI', 'RVI', 'NDWI', 'SAVI']
+DATA_FILES = []
+for root, dirs, files in os.walk(FOLDER):
+    if (LANDSAT_FILENAME in files) and (SENTINEL_FILENAME in files):
+        DATA_FILES.append(
+            (os.path.join(root, LANDSAT_FILENAME), os.path.join(root, SENTINEL_FILENAME))
+        )
+
+# SHuffle before train/test splitting
+random.shuffle(DATA_FILES)
+
+validation_count = int(len(DATA_FILES) * VALIDATION_RATIO)
+
+TRAIN_DATA = sorted(DATA_FILES[validation_count:])
+VALIDATION_DATA = sorted(DATA_FILES[:validation_count])
+
 
 
 # Fit the model to the training data.
-checkpoint_path = "training/cp-{epoch:04d}.ckpt"
-checkpoint_dir = os.path.dirname(checkpoint_path)
-# Create a callback that saves the model's weights every 5 epochs
-# cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path, verbose=1, save_weights_only=True, save_freq=25*BATCH_SIZE)
-
 model = get_model()
-# model.save_weights(checkpoint_path.format(epoch=0))
 
-
-batch_size = 128   # 196 is ok
-train_datasets = FileSequence(TRAIN_DATA, batch_size=batch_size, width=64, repeats=1)
-validation_datasets = FileSequence(VALIDATION_DATA, batch_size=batch_size, width=64, repeats=1)
+batch_size = 64   # 196 is ok
+train_datasets = FileSequence(TRAIN_DATA, batch_size=batch_size, width=64, repeats=3)
+validation_datasets = FileSequence(VALIDATION_DATA, batch_size=batch_size, width=64, repeats=3)
 with tf.device('/GPU:0'):
-    model.fit(x=train_datasets, validation_data=validation_datasets, epochs=3)
+    model.fit(x=train_datasets, validation_data=validation_datasets, epochs=10)
 
 model.save(MODEL_PATH, save_format='tf')
 
 
-reader = TiffReader()
-filename = '/data/Alarm/Samples/2021.05.01/147f298ebe5311ec81430242ac110003/probas_.tif'
-with tf.device('/CPU:0'):
-    print('Try file:', filename)
-    dt, _, _ = reader.get_sample_image(filename)
-    # crop input data to conform model
-    conv_layer_count = 2  # layers in the model
-    dx, dy = dt.shape[0], dt.shape[1]
-    dx = (dx // 2**conv_layer_count) * 2**conv_layer_count
-    dy = (dy // 2**conv_layer_count) * 2**conv_layer_count
-    dt = dt[:dx, :dy, :]
-    res = model.predict(np.array([dt]))
-    res = np.squeeze(res)
-    tiff.imwrite('/data/Alarm/Samples/2021.05.01/147f298ebe5311ec81430242ac110003/res.tiff', res, planarconfig='contig')
+# Use apply_model.script
+
+# reader = TiffReader()
+# filename = '/data/Alarm/Samples/2021.05.01/147f298ebe5311ec81430242ac110003/probas_.tif'
+# with tf.device('/CPU:0'):
+    # print('Try file:', filename)
+    # dt, _, _ = reader.get_sample_image(filename)
+    # # crop input data to conform model
+    # conv_layer_count = 2  # layers in the model
+    # dx, dy = dt.shape[0], dt.shape[1]
+    # dx = (dx // 2**conv_layer_count) * 2**conv_layer_count
+    # dy = (dy // 2**conv_layer_count) * 2**conv_layer_count
+    # dt = dt[:dx, :dy, :]
+    # res = model.predict(np.array([dt]))
+    # res = np.squeeze(res)
+    # tiff.imwrite('/data/Alarm/Samples/2021.05.01/147f298ebe5311ec81430242ac110003/res.tiff', res, planarconfig='contig')
