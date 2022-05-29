@@ -42,7 +42,7 @@ def apply_model(filename, result_filename, model_path, input_band_count=8):
     geotransform = in_ds.GetGeoTransform()
 
     driver = gdal.GetDriverByName('Gtiff')
-    dataset = driver.Create(result_filename, dx, dx, output_band_count, gdal.GDT_Float32)
+    dataset = driver.Create(result_filename, dx, dy, output_band_count, gdal.GDT_Float32)
     dataset.SetGeoTransform(geotransform)
     dataset.SetProjection(projection)
     dataset.WriteRaster(0, 0, dx, dy, res.tobytes())
