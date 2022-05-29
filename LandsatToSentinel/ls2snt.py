@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 
+'''This module is used for NN training only. It is nor required for inference of trained models'''
+
+
 import os
 import random
+import sys
 
 from pprint import pprint
 
@@ -28,7 +32,8 @@ SENTINEL_FILENAME = 'sentinel.tif'
 
 VALIDATION_RATIO = 0.33 
 
-MODEL_PATH = '/data/Alarm/Samples/Model'
+INPUT_MODEL_PATH = '/data/Alarm/Samples/Init_Model'
+OUTPUT_MODEL_PATH = '/data/Alarm/Samples/Final_Model'
 
 
 class TiffReader:
@@ -166,32 +171,22 @@ TRAIN_DATA = sorted(DATA_FILES[validation_count:])
 VALIDATION_DATA = sorted(DATA_FILES[:validation_count])
 
 
-
 # Fit the model to the training data.
-model = get_model()
+if len(sys.argv) == 1:
+    model = get_model()
+elif sys.argv[1] == 'retrain':
+    model = models.load_model(INPUT_MODEL_PATH)
+else:
+    raise RuntimeError('Use "retrain" argument or none of arguments')
 
-batch_size = 64   # 196 is ok
+batch_size = 32   # 196 is ok for my GPU and file size
 train_datasets = FileSequence(TRAIN_DATA, batch_size=batch_size, width=64, repeats=3)
 validation_datasets = FileSequence(VALIDATION_DATA, batch_size=batch_size, width=64, repeats=3)
 with tf.device('/GPU:0'):
     model.fit(x=train_datasets, validation_data=validation_datasets, epochs=10)
 
-model.save(MODEL_PATH, save_format='tf')
+model.save(OUTPUT_MODEL_PATH, save_format='tf')
 
 
 # Use apply_model.script
 
-# reader = TiffReader()
-# filename = '/data/Alarm/Samples/2021.05.01/147f298ebe5311ec81430242ac110003/probas_.tif'
-# with tf.device('/CPU:0'):
-    # print('Try file:', filename)
-    # dt, _, _ = reader.get_sample_image(filename)
-    # # crop input data to conform model
-    # conv_layer_count = 2  # layers in the model
-    # dx, dy = dt.shape[0], dt.shape[1]
-    # dx = (dx // 2**conv_layer_count) * 2**conv_layer_count
-    # dy = (dy // 2**conv_layer_count) * 2**conv_layer_count
-    # dt = dt[:dx, :dy, :]
-    # res = model.predict(np.array([dt]))
-    # res = np.squeeze(res)
-    # tiff.imwrite('/data/Alarm/Samples/2021.05.01/147f298ebe5311ec81430242ac110003/res.tiff', res, planarconfig='contig')
