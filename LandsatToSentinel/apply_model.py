@@ -18,6 +18,7 @@ def apply_model(filename, result_filename, model_path, input_band_count=8):
 
     in_ds = gdal.Open(filename)
     arr = np.array(in_ds.ReadAsArray())
+    arr = np.nan_to_num(arr)
 
     # roll axis to conform TF model input
     data = np.rollaxis(arr, 0, 3)
@@ -54,7 +55,7 @@ def apply_model(filename, result_filename, model_path, input_band_count=8):
 
 
 if __name__ == "__main__":
-    model_path = '/tmp/Model'
+    model_path = '/data/Alarm/Samples/Final_Model'
     filename = '/data/Alarm/Samples/2021.09.01/0b511354cb9611ec8cb90242ac110008/landsat.tif'
     result_filename = '/data/Alarm/Samples/2021.09.01/0b511354cb9611ec8cb90242ac110008/result.tif'
     apply_model(filename, result_filename, model_path)

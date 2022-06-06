@@ -7,6 +7,7 @@ import os
 import random
 import sys
 
+from collections import defaultdict
 from pprint import pprint
 
 import numpy as np
@@ -43,7 +44,7 @@ class TiffReader:
         arr = np.nan_to_num(arr)
 
         # roll axis to conform TF model input
-        arr = np.rollaxis(arr, 0, 3)
+        arr = np.rollaxis(arr, 0, 3)   # new dimensions are: x, y, bands
 
         if return_mask:
             mask = np.logical_not(np.isnan(arr).any(axis=2))
@@ -54,14 +55,29 @@ class TiffReader:
             arr = np.nan_to_num(arr)
             return arr
 
+class ArrayScaler:
+    def __init__(self, scales=defaultdict(lambda : 1.0)):
+        self.scales = scales
+    
+    def scale(self, arr):
+        _, _, bandcount = arr.shape
+        for i in range(bandcount):
+            factor = self.scales[i]
+            band = arr[:, :, i] 
+            band = np.tanh(band*factor)
+            arr[:, :, i] = band
+
+        return arr
+
 
 class FileSequence(Sequence):
-    def __init__(self, filenames, batch_size, repeats=32, width=1024):
+    def __init__(self, filenames, batch_size, scales, repeats=32, width=1024):
         self.filenames = filenames
         random.shuffle(self.filenames)
         self.batch_size = batch_size
         self.width = width
         self.tiff_reader = TiffReader()
+        self.scaler = ArrayScaler(scales)
 
         self.iter_count = 0
         self.max_iter_count = repeats
@@ -77,6 +93,7 @@ class FileSequence(Sequence):
         x_file, y_file = self.filenames[idx]
         x = self.get_sample_image(x_file, return_mask=False)
         y, mask = self.get_sample_image(y_file, return_mask=True)
+        y = self.scaler.scale(y)
         rows, cols = x.shape[0], x.shape[1]
         i = np.random.randint(low=0, high=rows-self.width, size=self.batch_size)
         j = np.random.randint(low=0, high=cols-self.width, size=self.batch_size)
@@ -96,6 +113,18 @@ class FileSequence(Sequence):
     def get_sample_image(self, filename, return_mask=False):
         # filename = str(filename)
         return self.tiff_reader.get_sample_image(filename, return_mask=return_mask)
+
+def get_tiff_scalefactors():
+    scales = defaultdict(lambda: 1.0)
+    scales[0] = 0.9
+    scales[1] = 1.5
+    scales[2] = 1.5
+    scales[3] = 1.0
+    scales[4] = 0.9
+    scales[5] = 1.0
+    scales[6] = 1.0
+
+    return scales
 
 
 
@@ -179,11 +208,15 @@ elif sys.argv[1] == 'retrain':
 else:
     raise RuntimeError('Use "retrain" argument or none of arguments')
 
-batch_size = 32   # 196 is ok for my GPU and file size
-train_datasets = FileSequence(TRAIN_DATA, batch_size=batch_size, width=64, repeats=3)
-validation_datasets = FileSequence(VALIDATION_DATA, batch_size=batch_size, width=64, repeats=3)
+
+
+
+batch_size = 196   # 196 is ok for my GPU and file size
+tiff_scale_factors = get_tiff_scalefactors()
+train_datasets = FileSequence(filenames=TRAIN_DATA, scales=tiff_scale_factors, batch_size=batch_size, width=64, repeats=3)
+validation_datasets = FileSequence(filenames=VALIDATION_DATA, scales=tiff_scale_factors, batch_size=batch_size, width=64, repeats=3)
 with tf.device('/GPU:0'):
-    model.fit(x=train_datasets, validation_data=validation_datasets, epochs=10)
+    model.fit(x=train_datasets, validation_data=validation_datasets, epochs=50)
 
 model.save(OUTPUT_MODEL_PATH, save_format='tf')
 
